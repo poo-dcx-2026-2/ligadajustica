@@ -6,19 +6,29 @@ import br.ufpb.dcx.poo.biblioteca.contrato.EmprestimoService;
 import br.ufpb.dcx.poo.biblioteca.contrato.RelatorioService;
 import br.ufpb.dcx.poo.biblioteca.contrato.UsuarioService;
 import br.ufpb.dcx.poo.biblioteca.contrato.excecoes.PersistenciaException;
+import br.ufpb.dcx.poo.biblioteca.extensao.quadrinhos.BibliotecaQuadrinhos;
+import br.ufpb.dcx.poo.biblioteca.extensao.quadrinhos.QuadrinhosService;
+import br.ufpb.dcx.poo.biblioteca.extensao.quadrinhos.RegraClassificacaoEtaria;
 
 /**
  * Reúne os quatro serviços em um único ponto de acesso.
  *
- * <p>Guarde esta classe na memória: na Aula 13 você vai descobrir que ela tem nome
- * e que a decisão de existir ou não tem consequências.</p>
+ * <p>É a fachada e o único ponto de montagem dos serviços. Cada serviço recebe o
+ * mesmo contexto, sem expor suas coleções à interface cliente.</p>
  */
-public class BibliotecaInicial implements Biblioteca {
+public class BibliotecaInicial implements BibliotecaQuadrinhos {
 
-    private final AcervoEmMemoria acervo = new AcervoEmMemoria();
-    private final UsuariosEmMemoria usuarios = new UsuariosEmMemoria();
-    private final EmprestimosNaoImplementados emprestimos = new EmprestimosNaoImplementados();
+    private final ContextoBiblioteca contexto = new ContextoBiblioteca();
+    private final RegraClassificacaoEtaria regraClassificacaoEtaria =
+            new RegraClassificacaoEtaria();
+    private final AcervoEmMemoria acervo = new AcervoEmMemoria(contexto);
+    private final UsuariosEmMemoria usuarios = new UsuariosEmMemoria(contexto);
+    private final EmprestimosEmMemoria emprestimos = new EmprestimosEmMemoria(
+            contexto, regraClassificacaoEtaria);
+    private final QuadrinhosService quadrinhos = new QuadrinhosService(
+            contexto.itens::get, contexto.usuarios::get);
     private final RelatoriosNaoImplementados relatorios = new RelatoriosNaoImplementados();
+    private final PersistenciaBiblioteca persistencia = new PersistenciaBiblioteca();
 
     @Override
     public AcervoService acervo() { return acervo; }
@@ -30,15 +40,19 @@ public class BibliotecaInicial implements Biblioteca {
     public EmprestimoService emprestimos() { return emprestimos; }
 
     @Override
+    public QuadrinhosService quadrinhos() { return quadrinhos; }
+
+    @Override
     public RelatorioService relatorios() { return relatorios; }
 
     @Override
     public void salvar() throws PersistenciaException {
-        throw new UnsupportedOperationException("Entrega 2: implementar salvar");
+        persistencia.salvar(contexto);
     }
 
     @Override
     public void carregar() throws PersistenciaException {
-        throw new UnsupportedOperationException("Entrega 2: implementar carregar");
+        ContextoBiblioteca carregado = persistencia.carregar();
+        contexto.substituirPor(carregado);
     }
 }

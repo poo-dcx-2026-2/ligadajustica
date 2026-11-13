@@ -3,6 +3,19 @@
 skinparam classAttributeIconSize 0
 hide empty members
 
+package "contrato (congelado)" {
+  interface Biblioteca
+  interface AcervoService
+  interface UsuarioService
+  interface EmprestimoService
+  interface RelatorioService
+  class ItemView
+  class ExemplarView
+  class UsuarioView
+  class EmprestimoView
+  class ReservaView
+}
+
 package "domínio" {
   class Item {
     - codigo : String {readOnly}
@@ -10,11 +23,10 @@ package "domínio" {
     - autoria : String {readOnly}
     - categoria : String {readOnly}
     - ano : int {readOnly}
+    - classificacaoIndicativa : Integer
     - exemplares : List<Exemplar>
     + adicionarExemplar(exemplar : Exemplar)
-    + getExemplares() : List<Exemplar>
-    + totalDeExemplares() : int
-    + exemplaresDisponiveis() : int
+    + definirClassificacaoIndicativa(idadeMinima : int)
   }
 
   class Exemplar {
@@ -22,69 +34,109 @@ package "domínio" {
     - item : Item {readOnly}
     - status : StatusExemplar
     + setStatus(status : StatusExemplar)
+    + darBaixa()
   }
 
   class Usuario {
     - matricula : String {readOnly}
     - nome : String {readOnly}
+    - idade : Integer
     - ativo : boolean
     - emprestimosAtivos : int
+    + definirIdade(idade : int)
+    + desativar()
+    + reativar()
+    + registrarEmprestimo()
+    + registrarDevolucao()
+  }
+
+  class Emprestimo {
+    - id : String {readOnly}
+    - exemplar : Exemplar {readOnly}
+    - usuario : Usuario {readOnly}
+    - dataDoEmprestimo : LocalDate {readOnly}
+    - dataPrevistaDeDevolucao : LocalDate {readOnly}
+    - dataDaDevolucao : LocalDate
+    + devolver(data : LocalDate)
+    + getStatus() : StatusEmprestimo
+  }
+
+  class Reserva {
+    - id : String {readOnly}
+    - item : Item {readOnly}
+    - usuario : Usuario {readOnly}
+    - dataDaReserva : LocalDate {readOnly}
+    - situacao : Situacao
+    - tomboSeparado : String
+    + separarExemplar(tombo : String)
+    + atender()
+    + cancelar()
   }
 }
 
-package "serviços em memória" {
-  class AcervoEmMemoria {
-    - itensPorCodigo : Map<String, Item>
-    - exemplaresPorTombo : Map<String, Exemplar>
-    + cadastrarItem(codigo : String, titulo : String, autoria : String, categoria : String, ano : int)
-    + buscarItem(codigo : String) : ItemView
-    + listarItens() : List<ItemView>
-    + buscarPorTitulo(trecho : String) : List<ItemView>
-    + adicionarExemplar(codigo : String, tombo : String)
-    + listarExemplares(codigo : String) : List<ExemplarView>
-    + buscarPorCategoria(categoria : String) : List<ItemView>
-    + baixarExemplar(tombo : String)
+package "aplicação em memória" {
+  class ContextoBiblioteca {
+    - itens : Map<String, Item>
+    - exemplares : Map<String, Exemplar>
+    - usuarios : Map<String, Usuario>
+    - emprestimos : Map<String, Emprestimo>
+    - reservas : Map<String, Reserva>
   }
 
-  class UsuariosEmMemoria {
-    - usuariosPorMatricula : Map<String, Usuario>
-    + cadastrarUsuario(matricula : String, nome : String)
-    + buscarUsuario(matricula : String) : UsuarioView
-    + listarUsuarios() : List<UsuarioView>
-    + desativarUsuario(matricula : String)
-    + reativarUsuario(matricula : String)
-  }
-
-  class BibliotecaInicial {
-    - acervo : AcervoEmMemoria
-    - usuarios : UsuariosEmMemoria
-    - emprestimos : EmprestimosNaoImplementados
-    - relatorios : RelatoriosNaoImplementados
-    + salvar()
-    + carregar()
-  }
-  class EmprestimosNaoImplementados
+  class AcervoEmMemoria
+  class UsuariosEmMemoria
+  class EmprestimosEmMemoria
   class RelatoriosNaoImplementados
+  class BibliotecaInicial
+  class PersistenciaBiblioteca
 }
 
-Item "1" *-- "0..*" Exemplar : possui
-AcervoEmMemoria "1" o-- "0..*" Item : indexa por código
-AcervoEmMemoria "1" o-- "0..*" Exemplar : indexa por tombo
-UsuariosEmMemoria "1" o-- "0..*" Usuario : indexa por matrícula
+package "extensão quadrinhos" {
+  interface BibliotecaQuadrinhos
+  class QuadrinhosService
+  class RegraClassificacaoEtaria
+  class ClassificacaoIndicativaException
+}
+
+Item "1" *-- "0..*" Exemplar : compõe
+Emprestimo "0..*" --> "1" Exemplar
+Emprestimo "0..*" --> "1" Usuario
+Reserva "0..*" --> "1" Item
+Reserva "0..*" --> "1" Usuario
+Reserva "0..1" --> "0..1" Exemplar : tombo separado
+
+BibliotecaInicial ..|> BibliotecaQuadrinhos
+BibliotecaQuadrinhos --|> Biblioteca
+BibliotecaInicial *-- ContextoBiblioteca
 BibliotecaInicial *-- AcervoEmMemoria
 BibliotecaInicial *-- UsuariosEmMemoria
-BibliotecaInicial *-- EmprestimosNaoImplementados
+BibliotecaInicial *-- EmprestimosEmMemoria
 BibliotecaInicial *-- RelatoriosNaoImplementados
+BibliotecaInicial *-- PersistenciaBiblioteca
+AcervoEmMemoria --> ContextoBiblioteca
+UsuariosEmMemoria --> ContextoBiblioteca
+EmprestimosEmMemoria --> ContextoBiblioteca
+PersistenciaBiblioteca --> ContextoBiblioteca : grava/carrega
+EmprestimosEmMemoria --> RegraClassificacaoEtaria
+RegraClassificacaoEtaria ..> ClassificacaoIndicativaException
+QuadrinhosService ..> Item
+QuadrinhosService ..> Usuario
 
-note right of AcervoEmMemoria
-  O índice separado de tombos assegura
-  unicidade global dos exemplares.
+note right of BibliotecaInicial
+  Fachada: os clientes acessam os serviços
+  e os dados apenas por Biblioteca.
 end note
 
-note bottom of Item
-  Código e título são obrigatórios.
-  A identidade do item é imutável e a lista
-  devolvida é uma cópia defensiva.
+note bottom of PersistenciaBiblioteca
+  Entidades não fazem E/S. O carregamento
+  valida o contexto temporário antes de trocar
+  o estado em uso.
+end note
+
+note bottom of Reserva
+  Apenas reservas ATIVAS aparecem na fila.
+  Ao devolver ou cancelar uma reserva separada,
+  o exemplar passa à próxima pessoa aguardando.
 end note
 
 @enduml

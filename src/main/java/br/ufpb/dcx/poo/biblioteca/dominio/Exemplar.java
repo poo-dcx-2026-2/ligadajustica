@@ -2,6 +2,7 @@ package br.ufpb.dcx.poo.biblioteca.dominio;
 
 import br.ufpb.dcx.poo.biblioteca.contrato.StatusExemplar;
 import br.ufpb.dcx.poo.biblioteca.contrato.excecoes.DadosInvalidosException;
+import br.ufpb.dcx.poo.biblioteca.contrato.excecoes.OperacaoNaoPermitidaException;
 
 
 public final class Exemplar {
@@ -30,5 +31,13 @@ public final class Exemplar {
             throw new DadosInvalidosException("O status do exemplar é obrigatório.");
         }
         this.status = status;
+    }
+
+    public void darBaixa() throws OperacaoNaoPermitidaException {
+        if (status == StatusExemplar.EMPRESTADO || status == StatusExemplar.INDISPONIVEL) {
+            throw new OperacaoNaoPermitidaException(
+                    "Exemplar emprestado ou já indisponível não pode ser baixado.");
+        }
+        status = StatusExemplar.INDISPONIVEL;
     }
 }

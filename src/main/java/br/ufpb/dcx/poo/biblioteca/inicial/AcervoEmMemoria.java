@@ -2,7 +2,6 @@ package br.ufpb.dcx.poo.biblioteca.inicial;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -20,8 +19,11 @@ import br.ufpb.dcx.poo.biblioteca.dominio.Item;
 /** Implementação em memória do cadastro de itens e exemplares. */
 public class AcervoEmMemoria implements AcervoService {
 
-    private final Map<String, Item> itensPorCodigo = new HashMap<>();
-    private final Map<String, Exemplar> exemplaresPorTombo = new HashMap<>();
+    private final ContextoBiblioteca contexto;
+
+    public AcervoEmMemoria() { this(new ContextoBiblioteca()); }
+
+    AcervoEmMemoria(ContextoBiblioteca contexto) { this.contexto = contexto; }
 
     /**
      * Cadastra um item após validar os campos obrigatórios e a unicidade do código.
@@ -35,12 +37,12 @@ public class AcervoEmMemoria implements AcervoService {
             throws RecursoDuplicadoException {
         exigirTexto(codigo, "codigo");
         exigirTexto(titulo, "titulo");
-        if (itensPorCodigo.containsKey(codigo)) {
+        if (contexto.itens.containsKey(codigo)) {
             throw new RecursoDuplicadoException("Já existe item com o código " + codigo);
         }
 
         Item item = new Item(codigo, titulo, autoria, categoria, ano);
-        itensPorCodigo.put(item.getCodigo(), item);
+        contexto.itens.put(item.getCodigo(), item);
     }
 
     /** Busca um item cadastrado pelo seu código. */
@@ -54,7 +56,7 @@ public class AcervoEmMemoria implements AcervoService {
     @Override
     public List<ItemView> listarItens() {
         List<ItemView> resultado = new ArrayList<>();
-        for (Item item : itensPorCodigo.values()) {
+        for (Item item : contexto.itens.values()) {
             resultado.add(paraView(item));
         }
         resultado.sort(Comparator.comparing(ItemView::titulo,
@@ -68,7 +70,7 @@ public class AcervoEmMemoria implements AcervoService {
         exigirTexto(trecho, "trecho");
         String consulta = trecho.toLowerCase(Locale.ROOT);
         List<ItemView> resultado = new ArrayList<>();
-        for (Item item : itensPorCodigo.values()) {
+        for (Item item : contexto.itens.values()) {
             if (item.getTitulo().toLowerCase(Locale.ROOT).contains(consulta)) {
                 resultado.add(paraView(item));
             }
@@ -80,7 +82,17 @@ public class AcervoEmMemoria implements AcervoService {
 
     @Override
     public List<ItemView> buscarPorCategoria(String categoria) {
-        throw new UnsupportedOperationException("Entrega 2: implementar buscarPorCategoria");
+        exigirTexto(categoria, "categoria");
+        List<ItemView> resultado = new ArrayList<>();
+        for (Item item : contexto.itens.values()) {
+            if (item.getCategoria() != null
+                    && item.getCategoria().equalsIgnoreCase(categoria)) {
+                resultado.add(paraView(item));
+            }
+        }
+        resultado.sort(Comparator.comparing(ItemView::titulo,
+                String.CASE_INSENSITIVE_ORDER));
+        return resultado;
     }
 
     /**
@@ -95,13 +107,13 @@ public class AcervoEmMemoria implements AcervoService {
         exigirTexto(tombo, "tombo");
         exigirTexto(codigoDoItem, "codigoDoItem");
         Item item = exigirItem(codigoDoItem);
-        if (exemplaresPorTombo.containsKey(tombo)) {
+        if (contexto.exemplares.containsKey(tombo)) {
             throw new RecursoDuplicadoException("Já existe exemplar com o tombo " + tombo);
         }
 
         Exemplar exemplar = new Exemplar(tombo, item);
         item.adicionarExemplar(exemplar);
-        exemplaresPorTombo.put(exemplar.getTombo(), exemplar);
+        contexto.exemplares.put(exemplar.getTombo(), exemplar);
     }
 
     /** Devolve uma cópia dos exemplares do item, em ordem de tombo. */
@@ -122,11 +134,25 @@ public class AcervoEmMemoria implements AcervoService {
     @Override
     public void baixarExemplar(String tombo)
             throws RecursoNaoEncontradoException, OperacaoNaoPermitidaException {
-        throw new UnsupportedOperationException("Entrega 2: implementar baixarExemplar");
+        exigirTexto(tombo, "tombo");
+        Exemplar exemplar = contexto.exemplares.get(tombo);
+        if (exemplar == null) {
+            throw new RecursoNaoEncontradoException("Exemplar não encontrado: " + tombo);
+        }
+        if (exemplar.getStatus() == br.ufpb.dcx.poo.biblioteca.contrato.StatusExemplar.EMPRESTADO
+                || exemplar.getStatus() == br.ufpb.dcx.poo.biblioteca.contrato.StatusExemplar.INDISPONIVEL) {
+            throw new OperacaoNaoPermitidaException(
+                    "Exemplar emprestado ou já indisponível não pode ser baixado.");
+        }
+        if (exemplar.getStatus() == br.ufpb.dcx.poo.biblioteca.contrato.StatusExemplar.RESERVADO) {
+            br.ufpb.dcx.poo.biblioteca.dominio.Reserva reserva = contexto.reservaDoExemplar(exemplar);
+            if (reserva != null) reserva.liberarExemplar();
+        }
+        exemplar.darBaixa();
     }
 
     private Item exigirItem(String codigo) throws RecursoNaoEncontradoException {
-        Item item = itensPorCodigo.get(codigo);
+        Item item = contexto.itens.get(codigo);
         if (item == null) {
             throw new RecursoNaoEncontradoException("Item não encontrado: " + codigo);
         }

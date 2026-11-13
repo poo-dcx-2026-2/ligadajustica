@@ -15,6 +15,7 @@ public final class Item {
     private final String categoria;
     private final int ano;
     private final List<Exemplar> exemplares = new ArrayList<>();
+    private Integer classificacaoIndicativa;
 
     public Item(String codigo, String titulo, String autoria, String categoria, int ano) {
         exigirTexto(codigo, "codigo");
@@ -31,6 +32,22 @@ public final class Item {
     public String getAutoria() { return autoria; }
     public String getCategoria() { return categoria; }
     public int getAno() { return ano; }
+    public Integer getClassificacaoIndicativa() { return classificacaoIndicativa; }
+
+    public void definirClassificacaoIndicativa(int idadeMinima) {
+        if (idadeMinima < 0 || idadeMinima > 18) {
+            throw new DadosInvalidosException("A classificação indicativa deve estar entre 0 e 18.");
+        }
+        classificacaoIndicativa = idadeMinima;
+    }
+
+    public void restaurarClassificacaoIndicativa(Integer idadeMinima) {
+        if (idadeMinima == null) {
+            classificacaoIndicativa = null;
+        } else {
+            definirClassificacaoIndicativa(idadeMinima);
+        }
+    }
 
     public List<Exemplar> getExemplares() { return List.copyOf(exemplares); }
 

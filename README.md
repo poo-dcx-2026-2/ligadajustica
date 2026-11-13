@@ -2,7 +2,7 @@
 
 Projeto incremental da disciplina de **Programação Orientada a Objetos** — DCX/CCAE/UFPB.
 
-Este projeto implementa os serviços de acervo e usuários previstos na Entrega 1. Empréstimos, relatórios, persistência e outras operações continuam como esqueletos para as entregas seguintes.
+Este projeto implementa o contrato comum das Entregas 1 e 2: cadastro e consulta do acervo, empréstimos, devoluções, reservas e persistência local. Os relatórios continuam reservados para a Entrega 3.
 
 ---
 
@@ -35,13 +35,15 @@ src/main/java/br/ufpb/dcx/poo/biblioteca/
 │
 ├── Fabrica.java       ← nome e assinatura congelados; o corpo é seu
 │
-├── dominio/           ← Item, Exemplar e Usuario; protegem identidade e invariantes
+├── dominio/           ← entidades Item, Exemplar, Usuario, Emprestimo e Reserva
+├── extensao/quadrinhos/ ← serviço e regra de classificação etária da equipe
 │
-└── inicial/           ← serviços em memória e esqueletos das Entregas 2 e 3
+└── inicial/           ← serviços em memória, fachada e persistência
     ├── AcervoEmMemoria.java
     ├── UsuariosEmMemoria.java
-    ├── EmprestimosNaoImplementados.java
-    ├── RelatoriosNaoImplementados.java
+    ├── EmprestimosEmMemoria.java
+    ├── PersistenciaBiblioteca.java
+    ├── RelatoriosNaoImplementados.java     (Entrega 3)
     └── BibliotecaInicial.java
 
 src/test/java/…       ← seus testes; comece pelos que já estão aqui
@@ -65,17 +67,22 @@ Fora isso, **tudo é seu**. O pacote `inicial` não é modelo: é matéria-prima
 
 | Serviço | Situação |
 |---|---|
-| `AcervoService` | Cadastro, busca/listagem por título e cadastro/listagem de exemplares implementados nesta entrega. Categoria e baixa de exemplar são da Entrega 2. |
-| `UsuarioService` | Cadastro, busca e listagem implementados nesta entrega. `desativar`/`reativar` são da Entrega 2. |
-| `EmprestimoService` | Esqueleto. Entrega 2. |
+| `AcervoService` | Cadastro, consultas por título e categoria, exemplares e baixa implementados. |
+| `UsuarioService` | Cadastro, busca, listagem, desativação e reativação implementados. |
+| `EmprestimoService` | Empréstimos, devoluções, consultas, reservas e cancelamentos implementados. |
 | `RelatorioService` | Esqueleto. Entrega 3. |
-| `Biblioteca.salvar/carregar` | Esqueleto. Entrega 2. |
+| `Biblioteca.salvar/carregar` | Estado completo salvo e restaurado por classe de persistência separada. |
 
-Métodos ainda não implementados lançam `UnsupportedOperationException` com a indicação da entrega. Cada mensagem diz o que fazer.
+Os métodos de relatório continuam como esqueleto para a Entrega 3.
 
-## Modelo de domínio
+## Persistência
+
+Os dados são gravados em `dados/biblioteca.dat`, no diretório de execução. Para testes ou outro local, defina a propriedade de sistema `biblioteca.dados` com o caminho do diretório. `carregar()` trata diretório/arquivo ausente como estado vazio e rejeita arquivo inválido sem substituir o estado atual. Os arquivos de execução ficam fora do Git.
+
+## Modelo de domínio e decisões
 
 O fonte PlantUML está em [`docs/modelo.puml`](docs/modelo.puml), e a imagem correspondente está em [`docs/modelo.png`](docs/modelo.png).
+As decisões sobre composição, responsabilidades GRASP, fachada, persistência e reservas na desativação estão em [`docs/decisoes.md`](docs/decisoes.md).
 
 ---
 
@@ -101,7 +108,22 @@ Sua equipe escolhe um acervo próprio: jogos, filmes, quadrinhos, instrumentos, 
 
 ### Nossa extensão
 
-**Acervo:** quadrinhos da Liga da Justiça. **Regra própria:** um usuário só pode tomar emprestada uma edição se sua idade for igual ou maior que a classificação indicativa da edição. Isso acrescenta a classificação ao cadastro da edição e uma verificação ao fluxo de empréstimo; a regra e os tipos da extensão ficam fora do pacote `contrato`. Nesta Entrega 1, a regra fica declarada; sua implementação é prevista para a Entrega 2. *(Proposta inferida pelo nome do repositório; a equipe deve confirmar ou ajustar antes de entregar.)*
+**Acervo:** quadrinhos da Liga da Justiça. **Regra própria:** um usuário só pode tomar emprestada uma edição se sua idade cadastrada for igual ou maior que a classificação indicativa daquela edição. A regra e o serviço autoral ficam em `extensao/quadrinhos`, fora do pacote congelado `contrato`. Use `BibliotecaQuadrinhos.quadrinhos()` para definir a classificação de um item e a idade de um usuário. Itens sem classificação configurada não recebem essa restrição; para item classificado, idade ausente ou abaixo do mínimo impede o empréstimo.
+
+```java
+import java.time.LocalDate;
+
+import br.ufpb.dcx.poo.biblioteca.Fabrica;
+import br.ufpb.dcx.poo.biblioteca.contrato.Biblioteca;
+import br.ufpb.dcx.poo.biblioteca.extensao.quadrinhos.BibliotecaQuadrinhos;
+
+Biblioteca biblioteca = Fabrica.novaBiblioteca();
+BibliotecaQuadrinhos extensao = (BibliotecaQuadrinhos) biblioteca;
+// Depois de cadastrar o item, o exemplar e o usuário:
+extensao.quadrinhos().definirClassificacaoIndicativa("HQ-001", 14);
+extensao.quadrinhos().definirIdadeUsuario("2026001", 16);
+String id = biblioteca.emprestimos().emprestar("T-001", "2026001", LocalDate.of(2026, 11, 13));
+```
 
 ---
 
