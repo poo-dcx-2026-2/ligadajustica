@@ -1,32 +1,142 @@
 @startuml
-' Modelo de domínio do sistema: Entrega 1.
-'
-' Este arquivo é o ponto de partida. Substitua pelo modelo da sua equipe.
-' O diagrama precisa corresponder ao código entregue.
-'
-' Para gerar a imagem: instale o plugin PlantUML no IntelliJ, ou use
-'   plantuml docs/modelo.puml
-' e versione a imagem gerada ao lado deste arquivo.
-
+!pragma layout smetana
 skinparam classAttributeIconSize 0
 hide empty members
 
-class Item {
-  - codigo : String
-  - titulo : String
+package "contrato (congelado)" {
+  interface Biblioteca
+  interface AcervoService
+  interface UsuarioService
+  interface EmprestimoService
+  interface RelatorioService
+  class ItemView
+  class ExemplarView
+  class UsuarioView
+  class EmprestimoView
+  class ReservaView
 }
 
-class Exemplar {
-  - tombo : String
+package "domínio" {
+  class Item {
+    - codigo : String {readOnly}
+    - titulo : String {readOnly}
+    - autoria : String {readOnly}
+    - categoria : String {readOnly}
+    - ano : int {readOnly}
+    - classificacaoIndicativa : Integer
+    - exemplares : List<Exemplar>
+    + adicionarExemplar(exemplar : Exemplar)
+    + definirClassificacaoIndicativa(idadeMinima : int)
+  }
+
+  class Exemplar {
+    - tombo : String {readOnly}
+    - item : Item {readOnly}
+    - status : StatusExemplar
+    + setStatus(status : StatusExemplar)
+    + darBaixa()
+  }
+
+  class Usuario {
+    - matricula : String {readOnly}
+    - nome : String {readOnly}
+    - idade : Integer
+    - ativo : boolean
+    - emprestimosAtivos : int
+    + definirIdade(idade : int)
+    + desativar()
+    + reativar()
+    + registrarEmprestimo()
+    + registrarDevolucao()
+  }
+
+  class Emprestimo {
+    - id : String {readOnly}
+    - exemplar : Exemplar {readOnly}
+    - usuario : Usuario {readOnly}
+    - dataDoEmprestimo : LocalDate {readOnly}
+    - dataPrevistaDeDevolucao : LocalDate {readOnly}
+    - dataDaDevolucao : LocalDate
+    + devolver(data : LocalDate)
+    + getStatus() : StatusEmprestimo
+  }
+
+  class Reserva {
+    - id : String {readOnly}
+    - item : Item {readOnly}
+    - usuario : Usuario {readOnly}
+    - dataDaReserva : LocalDate {readOnly}
+    - situacao : Situacao
+    - tomboSeparado : String
+    + separarExemplar(tombo : String)
+    + atender()
+    + cancelar()
+  }
 }
 
-Item "1" *-- "0..*" Exemplar : possui
+package "aplicação em memória" {
+  class ContextoBiblioteca {
+    - itens : Map<String, Item>
+    - exemplares : Map<String, Exemplar>
+    - usuarios : Map<String, Usuario>
+    - emprestimos : Map<String, Emprestimo>
+    - reservas : Map<String, Reserva>
+  }
 
-note bottom of Item
-  Ponto de partida, não modelo pronto.
-  Decidam: quais entidades existem,
-  quem guarda o quê, quais invariantes
-  cada objeto protege.
+  class AcervoEmMemoria
+  class UsuariosEmMemoria
+  class EmprestimosEmMemoria
+  class RelatoriosNaoImplementados
+  class BibliotecaInicial
+  class PersistenciaBiblioteca
+}
+
+package "extensão quadrinhos" {
+  interface BibliotecaQuadrinhos
+  class QuadrinhosService
+  class RegraClassificacaoEtaria
+  class ClassificacaoIndicativaException
+}
+
+Item "1" *-- "0..*" Exemplar : compõe
+Emprestimo "0..*" --> "1" Exemplar
+Emprestimo "0..*" --> "1" Usuario
+Reserva "0..*" --> "1" Item
+Reserva "0..*" --> "1" Usuario
+Reserva "0..1" --> "0..1" Exemplar : tombo separado
+
+BibliotecaInicial ..|> BibliotecaQuadrinhos
+BibliotecaQuadrinhos --|> Biblioteca
+BibliotecaInicial *-- ContextoBiblioteca
+BibliotecaInicial *-- AcervoEmMemoria
+BibliotecaInicial *-- UsuariosEmMemoria
+BibliotecaInicial *-- EmprestimosEmMemoria
+BibliotecaInicial *-- RelatoriosNaoImplementados
+BibliotecaInicial *-- PersistenciaBiblioteca
+AcervoEmMemoria --> ContextoBiblioteca
+UsuariosEmMemoria --> ContextoBiblioteca
+EmprestimosEmMemoria --> ContextoBiblioteca
+PersistenciaBiblioteca --> ContextoBiblioteca : grava/carrega
+EmprestimosEmMemoria --> RegraClassificacaoEtaria
+RegraClassificacaoEtaria ..> ClassificacaoIndicativaException
+QuadrinhosService ..> Item
+QuadrinhosService ..> Usuario
+
+note right of BibliotecaInicial
+  Fachada: os clientes acessam os serviços
+  e os dados apenas por Biblioteca.
+end note
+
+note bottom of PersistenciaBiblioteca
+  Entidades não fazem E/S. O carregamento
+  valida o contexto temporário antes de trocar
+  o estado em uso.
+end note
+
+note bottom of Reserva
+  Apenas reservas ATIVAS aparecem na fila.
+  Ao devolver ou cancelar uma reserva separada,
+  o exemplar passa à próxima pessoa aguardando.
 end note
 
 @enduml

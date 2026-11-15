@@ -2,7 +2,7 @@
 
 Projeto incremental da disciplina de **Programação Orientada a Objetos** — DCX/CCAE/UFPB.
 
-Este repositório é o ponto de partida do seu projeto. Ele compila, executa e tem testes passando, mas está **deliberadamente incompleto** e contém decisões de design questionáveis. Encontrá-las, justificá-las e corrigi-las faz parte da disciplina.
+Este projeto implementa o contrato comum das Entregas 1 e 2: cadastro e consulta do acervo, empréstimos, devoluções, reservas e persistência local. Os relatórios continuam reservados para a Entrega 3.
 
 ---
 
@@ -15,9 +15,7 @@ mvn -B verify      # compila e roda os testes
 mvn -B test        # só os testes
 ```
 
-Se tudo estiver certo, você verá `Tests run: 19, Failures: 0, Errors: 0, Skipped: 5`.
-
-Os 5 pulados são os testes marcados com `@Disabled`: eles cobrem o que você ainda vai implementar. Remova a anotação de cada um quando implementar o método correspondente.
+Se tudo estiver certo, o Maven termina com `BUILD SUCCESS` e nenhum teste falhando.
 
 ---
 
@@ -37,13 +35,15 @@ src/main/java/br/ufpb/dcx/poo/biblioteca/
 │
 ├── Fabrica.java       ← nome e assinatura congelados; o corpo é seu
 │
-└── inicial/           ← ponto de partida; altere, mova, renomeie ou apague
-    ├── Item.java
-    ├── Exemplar.java
+├── dominio/           ← entidades Item, Exemplar, Usuario, Emprestimo e Reserva
+├── extensao/quadrinhos/ ← serviço e regra de classificação etária da equipe
+│
+└── inicial/           ← serviços em memória, fachada e persistência
     ├── AcervoEmMemoria.java
     ├── UsuariosEmMemoria.java
-    ├── EmprestimosNaoImplementados.java
-    ├── RelatoriosNaoImplementados.java
+    ├── EmprestimosEmMemoria.java
+    ├── PersistenciaBiblioteca.java
+    ├── RelatoriosNaoImplementados.java     (Entrega 3)
     └── BibliotecaInicial.java
 
 src/test/java/…       ← seus testes; comece pelos que já estão aqui
@@ -67,21 +67,38 @@ Fora isso, **tudo é seu**. O pacote `inicial` não é modelo: é matéria-prima
 
 | Serviço | Situação |
 |---|---|
-| `AcervoService` | `cadastrarItem`, `buscarItem` e `listarItens` funcionam para os casos simples. O resto é seu. |
-| `UsuarioService` | `cadastrarUsuario`, `buscarUsuario` e `listarUsuarios` funcionam. `desativar`/`reativar` são da Entrega 2. |
-| `EmprestimoService` | Esqueleto. Entrega 2. |
+| `AcervoService` | Cadastro, consultas por título e categoria, exemplares e baixa implementados. |
+| `UsuarioService` | Cadastro, busca, listagem, desativação e reativação implementados. |
+| `EmprestimoService` | Empréstimos, devoluções, consultas, reservas e cancelamentos implementados. |
 | `RelatorioService` | Esqueleto. Entrega 3. |
-| `Biblioteca.salvar/carregar` | Esqueleto. Entrega 2. |
+| `Biblioteca.salvar/carregar` | Estado completo salvo e restaurado por classe de persistência separada. |
 
-Métodos ainda não implementados lançam `UnsupportedOperationException` com a indicação da entrega. Cada mensagem diz o que fazer.
+Os métodos de relatório continuam como esqueleto para a Entrega 3.
+
+## Persistência
+
+Os dados são gravados em `dados/biblioteca.dat`, no diretório de execução. Para testes ou outro local, defina a propriedade de sistema `biblioteca.dados` com o caminho do diretório. `carregar()` trata diretório/arquivo ausente como estado vazio e rejeita arquivo inválido sem substituir o estado atual. Os arquivos de execução ficam fora do Git.
+
+## Modelo de domínio e decisões
+
+O fonte PlantUML está em [`docs/modelo.puml`](docs/modelo.puml), e a imagem correspondente está em [`docs/modelo.png`](docs/modelo.png).
+As decisões sobre composição, responsabilidades GRASP, fachada, persistência e reservas na desativação estão em [`docs/decisoes.md`](docs/decisoes.md).
 
 ---
 
+## Justificativa das coleções
+
+O acervo usa `Map<String, Item>` para localizar cada item pelo código sem percorrer todos os cadastros. Um segundo `Map<String, Exemplar>` indexa os tombos no acervo inteiro e permite recusar duplicidade entre itens diferentes. Os exemplares também pertencem ao seu `Item`, que mantém a relação e devolve uma cópia da lista.
+
+Os usuários ficam em `Map<String, Usuario>`, porque a matrícula é sua identidade e as operações mais comuns buscam ou recusam duplicidade por matrícula. As consultas ordenadas constroem listas de `View` e não expõem os mapas internos.
+
+## Relato do defeito encontrado
+
+A busca inicial do item comparava códigos com `==`, que verifica se duas referências apontam para o mesmo objeto, em vez de comparar o texto. Reproduzimos o erro cadastrando o código `L1` e buscando com `new String("L1")`: apesar do mesmo conteúdo, a busca dizia que o item não existia. O teste de regressão `codigoComMesmoValorEmOutraInstancia` falhou antes da correção e passou depois que a busca passou a usar a chave do `Map`, que compara Strings pelo valor.
+
 ## Um aviso honesto
 
-O código do pacote `inicial` **tem problemas**. Alguns são de design e você vai reconhecê-los conforme a disciplina avançar. Pelo menos um é um defeito de comportamento que os testes atuais **não** pegam: o sistema faz a coisa errada em uma situação que ninguém testou ainda.
-
-Isso é proposital. Encontrar esse tipo de defeito — reproduzir, escrever o teste que falha, corrigir, ver o teste passar — é uma das competências avaliadas. Não confie em suíte verde como prova de correção.
+O ponto de partida continha decisões de design questionáveis e um defeito de comportamento não coberto pelos testes originais. O defeito já foi reproduzido, coberto por um teste de regressão e corrigido; o relato acima registra esse processo. A suíte verde continua sendo evidência dos cenários testados, não prova absoluta de ausência de defeitos.
 
 ---
 
@@ -91,7 +108,22 @@ Sua equipe escolhe um acervo próprio: jogos, filmes, quadrinhos, instrumentos, 
 
 ### Nossa extensão
 
-> Substitua esta seção: qual acervo, qual regra de negócio própria, o que ela muda no comportamento do sistema.
+**Acervo:** quadrinhos da Liga da Justiça. **Regra própria:** um usuário só pode tomar emprestada uma edição se sua idade cadastrada for igual ou maior que a classificação indicativa daquela edição. A regra e o serviço autoral ficam em `extensao/quadrinhos`, fora do pacote congelado `contrato`. Use `BibliotecaQuadrinhos.quadrinhos()` para definir a classificação de um item e a idade de um usuário. Itens sem classificação configurada não recebem essa restrição; para item classificado, idade ausente ou abaixo do mínimo impede o empréstimo.
+
+```java
+import java.time.LocalDate;
+
+import br.ufpb.dcx.poo.biblioteca.Fabrica;
+import br.ufpb.dcx.poo.biblioteca.contrato.Biblioteca;
+import br.ufpb.dcx.poo.biblioteca.extensao.quadrinhos.BibliotecaQuadrinhos;
+
+Biblioteca biblioteca = Fabrica.novaBiblioteca();
+BibliotecaQuadrinhos extensao = (BibliotecaQuadrinhos) biblioteca;
+// Depois de cadastrar o item, o exemplar e o usuário:
+extensao.quadrinhos().definirClassificacaoIndicativa("HQ-001", 14);
+extensao.quadrinhos().definirIdadeUsuario("2026001", 16);
+String id = biblioteca.emprestimos().emprestar("T-001", "2026001", LocalDate.of(2026, 11, 13));
+```
 
 ---
 
